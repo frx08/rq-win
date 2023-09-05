@@ -1,15 +1,33 @@
 import time
 import sys
 import random
-
+import signal
 import times
 import rq
+from rq.timeouts import BaseDeathPenalty
 import rq.job
 import rq.compat
 import rq.worker
 
 from rq.defaults import (DEFAULT_LOGGING_FORMAT, DEFAULT_LOGGING_DATE_FORMAT)
 
+class WindowsSignalDeathPenalty(BaseDeathPenalty):
+    def handle_death_penalty(self, signum, frame):
+        raise self._exception('Task exceeded maximum timeout value ({0} seconds)'.format(self._timeout))
+
+    def setup_death_penalty(self):
+        """Sets up an alarm signal and a signal handler that raises
+        an exception after the timeout amount (expressed in seconds).
+        """
+        signal.signal(signal.SIGTERM, self.handle_death_penalty)
+        signal.alarm(self._timeout)
+
+    def cancel_death_penalty(self):
+        """Removes the death penalty alarm and puts back the system into
+        default signal handling.
+        """
+        signal.alarm(0)
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
 class WindowsWorker(rq.Worker):
     """
@@ -29,6 +47,7 @@ class WindowsWorker(rq.Worker):
             # The default timeout is 420, however, which is too long.
             kwargs['default_worker_ttl'] = 2
         super(WindowsWorker, self).__init__(*args, **kwargs)
+        self.death_penalty_class = WindowsSignalDeathPenalty
 
     def work(self, burst=False, logging_level="INFO", date_format=DEFAULT_LOGGING_DATE_FORMAT,
              log_format=DEFAULT_LOGGING_FORMAT, max_jobs=None, with_scheduler=False):
@@ -94,6 +113,8 @@ class WindowsWorker(rq.Worker):
             job._status = rq.job.JobStatus.FINISHED
             job.ended_at = times.now()
 
+            job.success_callback(job, job.connection, rv)
+
             #
             # Using the code from Worker.handle_job_success
             #
@@ -116,6 +137,7 @@ class WindowsWorker(rq.Worker):
         except:
             # Use the public setter here, to immediately update Redis
             job.status = rq.job.JobStatus.FAILED
+            job.failure_callback(job, job.connection, *sys.exc_info())
             self.handle_exception(job, *sys.exc_info())
             return False
 
