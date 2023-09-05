@@ -49,8 +49,16 @@ class WindowsWorker(rq.Worker):
         super(WindowsWorker, self).__init__(*args, **kwargs)
         self.death_penalty_class = WindowsSignalDeathPenalty
 
-    def work(self, burst=False, logging_level="INFO", date_format=DEFAULT_LOGGING_DATE_FORMAT,
-             log_format=DEFAULT_LOGGING_FORMAT, max_jobs=None, with_scheduler=False):
+    def work(self,
+             burst=False,
+             logging_level="INFO",
+             date_format=DEFAULT_LOGGING_DATE_FORMAT,
+             log_format=DEFAULT_LOGGING_FORMAT,
+             max_jobs=None,
+             with_scheduler=False,
+             max_idle_time=None,
+             dequeue_strategy='default',
+             ):
         """Starts the work loop.
 
         Pops and performs all jobs on the current list of queues.  When all
@@ -67,7 +75,9 @@ class WindowsWorker(rq.Worker):
             date_format=date_format,
             log_format=log_format,
             max_jobs=max_jobs,
-            with_scheduler=with_scheduler
+            with_scheduler=with_scheduler,
+            max_idle_time=max_idle_time,
+            dequeue_strategy=dequeue_strategy
         )
 
 
